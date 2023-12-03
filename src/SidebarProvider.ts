@@ -1,11 +1,16 @@
 import * as vscode from "vscode";
 import OpenAI from "openai";
 
+let openai: OpenAI | null = null;
+
 export class SidebarProvider implements vscode.WebviewViewProvider {
   _view?: vscode.WebviewView;
   _doc?: vscode.TextDocument;
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
+  private onDidChangeTreeData: vscode.EventEmitter<
+    any | undefined | null | void
+  > = new vscode.EventEmitter<any | undefined | null | void>();
 
   public resolveWebviewView(webviewView: vscode.WebviewView) {
     this._view = webviewView;
@@ -13,7 +18,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.options = {
       // Allow scripts in the webview
       enableScripts: true,
-
       localResourceRoots: [this._extensionUri],
     };
 
@@ -71,6 +75,24 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this._view = panel;
   }
 
+  public showWithText() {
+    vscode.window.showInformationMessage("here2");
+    let editor = vscode.window.activeTextEditor;
+
+    if (editor === undefined) {
+      vscode.window.showErrorMessage("No active text editor");
+      return;
+    }
+
+    let text = editor.document.getText(editor.selection);
+    vscode.window.showInformationMessage(text);
+    // send message back to the sidebar component
+    this._view?.webview.postMessage({
+      type: "onSelectedText",
+      value: text,
+    });
+  }
+
   private _getHtmlForWebview(webview: vscode.Webview) {
     const styleResetUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, "media", "reset.css")
@@ -124,7 +146,7 @@ function getNonce() {
 }
 
 async function askQuestion(question: string, apiKey: string) {
-  const openai = new OpenAI({ apiKey });
+  if (!openai) openai = new OpenAI({ apiKey });
 
   const completion = await openai.chat.completions.create({
     messages: [{ role: "system", content: question }],
